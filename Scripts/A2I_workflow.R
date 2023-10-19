@@ -80,14 +80,4 @@ echo Finished running ', file_name1, '
 
 fileConn <- file(sh_runfile)
 writeLines(paste(full_run_input, sep=""), fileConn)
-close(fileConn)
-~                                                                                                                                                                                                                                                 
-~                                                                                                                                                                                                                                                 
-~                                                                                                                                                                                                                                                 
-~                                                                                                                                                                                                                                                 
-~                                                                                                                                                                                                                                                 
-~                                                                                                                                                                                                                                                 
-~                                                                                                                                                                                                                                                 
-~                                                                                                                                                                                                                                                 
-"A2I_workflow.R" 83L, 4895C                                                                                                                                                                                                     1,1           All
-[2] 0:chunga08@li03c04:/sc/arion/projects/breen_lab/AD_editing/scripts*                                                                                                                                   "li03c04.chimera.hpc.ms" 23:35 18-Oct-23
+close(fileConn)                                                                                                                               
