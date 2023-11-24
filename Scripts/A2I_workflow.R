@@ -1,83 +1,161 @@
-setwd("/sc/arion/projects/breen_lab/AD_editing/MSBB/BM_10/scripts")
+library(tidyverse)
+library(stringr)
 
-file_list=read.table("samples.txt", stringsAsFactors=FALSE) # a text file with names of all unmapped bam files
-files=basename(file_list$V1)
-full_run_input <- NULL
-full_run_input <- paste('#!/bin/bash\n', sep="")
-for(item in 1:length(files)){
-        file_name1=(files[item])
-        sh_file <- paste(file_name1,"_config.sh", sep="")
-        full_run_input <- paste(full_run_input,'bsub < ', sh_file, ';\n sleep 1;\n', sep="")
-        sh_runfile <- "run_all_samples.sh"
-        fileConn <- file(sh_file)
+# Set working directory as the study folder
+setwd("/sc/arion/projects/breen_lab/AD_editing/MSBB/")
 
-writeLines(paste('
-#!/bin/bash
-#BSUB -W 5:00
-#BSUB -n 8
-#BSUB -q express
-#BSUB -P acc_breen_lab
-#BSUB -cwd /sc/arion/projects/breen_lab/AD_editing/MSBB/BM_10/scripts
-#BSUB -o /sc/arion/projects/breen_lab/AD_editing/MSBB/BM_10/scripts/logs/',file_name1,'.log.out
-#BSUB -e /sc/arion/projects/breen_lab/AD_editing/MSBB/BM_10/scripts/logs/',file_name1,'.log.err
-#BSUB -u alexander.chung@icahn.mssm.edu
-#BSUB -R rusage[mem=8000]
-#BSUB -R span[hosts=1]
-#BSUB -L /bin/bash
-
-#load all modules required...
-#module load samtools/1.1            #this will query all recoding sites
-#module load star/2.7.3a         #this does the mapping
-#module load subread             #this does the counting
-#module load rnaeditingindexer   #this generates the AEI
-#module load picard              #load picard tools for QC                   
-
-#move into local directory...
-cd /sc/arion/projects/breen_lab/AD_editing/MSBB/BM_10/editing_sites
-
-#Map FASTQ files to generate bam files
-#STAR --genomeDir /sc/arion/projects/H_PBG/REFERENCES/GRCh38/star/2.7.1a/Gencode.v30.overhang100/chr_primary --sjdbGTFfile /sc/arion/projects/H_PBG/REFERENCES/GRCh38/Gencode/release_30/gencode.v30.primary_assembly.annotation.gtf --runThreadN 12 --twopassMode None --outReadsUnmapped Fastx --outSAMtype BAM SortedByCoordinate --outSAMattributes NH HI AS NM MD --outFileNamePrefix ',file_name1,'. --readFilesCommand zcat  --readFilesIn ',file_name1,'_1.fastq.gz ',file_name1,'_2.fastq.gz --limitBAMsortRAM 71361722155
-
-#Input bam file and generate RNA-seq counts for each gene (#if stranded use -s1 or -s2, depending on directionality. otherwise, if unstranded use -s0)
-#featureCounts -T 5 -p -t exon -s 0 -g gene_id -a /sc/arion/projects/H_PBG/REFERENCES/GRCh38/Gencode/release_30/gencode.v30.primary_assembly.annotation.gtf ', file_name1,'.Aligned.sortedByCoord.out.bam -o ', file_name1,'.counts.txt
-
-#getting halted before removal of temporary files 
-#This removes temp files left over from STAR
-#rm ', file_name1,'.Unmapped.out.mate1
-#rm ', file_name1,'.Unmapped.out.mate2
-#rm -r ',file_name1,'._STARgenome
-#rm ',file_name1,'.Log.progress.out
-#rm ',file_name1,'.Log.out
-#rm ',file_name1,'.SJ.out.tab
-
-#This generates PICARD QC
-#java -jar $PICARD CollectAlignmentSummaryMetrics R=/sc/arion/projects/breen_lab/references/hg38.fa I= ', file_name1,'.Aligned.sortedByCoord.out.bam O= ', file_name1, '_picard.txt
-
-#load all modules required...
-module load samtools/1.1            #this will query all recoding sites
-module load subread             #this does the counting
-export PERL5LIB=$PERL5LIB:/sc/arion/projects/breen_lab/RecodingProject/BrainSpan/
-
-perl /sc/arion/projects/breen_lab/RecodingProject/BrainSpan/query_known_sites.pl /sc/arion/projects/breen_lab/RecodingProject/BrainSpan/CNS_REDi_combined.txt /sc/arion/projects/adineto/mayo/bam_files/MayoRNAseq_Cerebellum_BAMs/',file_name1,'.aligned.sort.coord.bam  /sc/arion/projects/breen_lab/AD_editing/MAYO/CER/editing_sites/',file_name1,'_edits.txt
-
-module load rnaeditingindexer   #this generates the AEI
-mkdir /sc/arion/projects/breen_lab/AD_editing/MAYO/CER/AEI/',file_name1,'_AEI
-cp /sc/arion/projects/adineto/mayo/bam_files/MayoRNAseq_Cerebellum_BAMs/',file_name1,'.aligned.sort.coord.bam /sc/arion/projects/breen_lab/AD_editing/MAYO/CER/AEI/',file_name1,'_AEI
-cd /sc/arion/projects/breen_lab/AD_editing/MAYO/CER/AEI/',file_name1,'_AEI
-
-RNAEditingIndex -d . -f ',file_name1,'.aligned.sort.coord.bam -o . --genes_expression /sc/arion/projects/breen_lab/AEI/GenesExpression/HomoSapiens/ucscHg38GTExGeneExpression.bed.gz --refseq /sc/arion/projects/breen_lab/AEI/RefSeqAnnotations/HomoSapiens/ucscHg38RefSeqCurated.bed.gz --snps /sc/arion/projects/breen_lab/AEI/SNPs/HomoSapiens/ucscHg38CommonGenomicSNPs150v2.bed.gz -gf /sc/arion/projects/breen_lab/AEI/Genomes/HomoSapiens/ucscHg38Genome.fa -rb /sc/arion/projects/breen_lab/AEI/Regions/HomoSapiens/ucscHg38Alu.bed.gz --genome UserProvided --paired_end
-
-#This renames the original output file (EditingIndex.csv) and gives it a new title 
-mv EditingIndex.csv  ',file_name1,'_AEI.csv
-mv ',file_name1,'_AEI.csv /sc/arion/projects/breen_lab/AD_editing/MAYO/CER/AEI
+# Load data ---------------------------------------------------------------
+data <- read_csv("MSBB_aggregate_data.csv") %>%
+  mutate(AD = factor(ifelse(CERAD %in% c(1, 2), "pos", ifelse(CERAD == 4, "neg", NA)))) 
+data$BrodmannArea <- as.factor(data$BrodmannArea)
+raw_edits <- read_tsv("./editing_sites/known_sites/edit_matrix_clean.tsv") # Table of edit sites and samples
 
 
-echo Finished running ', file_name1, '
-        ', sep=""), fileConn)
-        close(fileConn)
+# Create region-specific data frames
+BM10 <- data %>%
+  filter(BrodmannArea == 10)
 
+# Create data frames for each region --------------------------------------
+# Select column names from 'meta' for each BrodmannArea
+BM10_samples <- data$filename[data$BrodmannArea == 10]
+
+# Subset meta
+BM10_aggregate <- aggregate_data %>%
+  filter(BrodmannArea == 10)
+
+# Subset raw edits into Brodmann Areas
+BM10_raw <- raw_edits %>%
+  select(site, all_of(BM10_samples)) %>%
+  select(site, sort(names(.))) %>%
+  column_to_rownames("site")
+BM10_raw <- BM10_raw[, names(BM10_raw) %in% BM10$filename[!is.na(BM10$AD)]]
+
+
+# AEI analysis ------------------------------------------------------------
+library(ggplot2)
+
+# AEI scores of all regions AD vs non-AD
+sub_data <- data %>%
+  filter(!is.na(AD))
+ggplot(sub_data, aes(x = BrodmannArea, y = A2GEditingIndex, fill = AD)) +
+  scale_fill_manual(values = c("#d80c8c", "#00aeef", "pink")) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "Brodmann Area", y = "AEI Index", title = "AEIs of AD vs Controls") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Check statistical significance
+# Separate the data into two groups: AD and Control
+# Split the data into subsets based on 'BrodmannArea'
+data_split <- split(sub_data, sub_data$BrodmannArea)
+
+# Perform Mann-Whitney U test for each subset
+test_results <- lapply(data_split, function(subset) {
+  data_ad <- subset[subset$AD == "pos", ]
+  data_control <- subset[subset$AD == "neg", ]
+  result <- wilcox.test(data_ad$A2GEditingIndex, data_control$A2GEditingIndex)
+  return(result)
+})
+
+# Print the test results for each subset
+for (i in 1:length(test_results)) {
+  cat("Brodmann Area:", names(test_results)[i], "\n")
+  print(test_results[[i]])
+  cat("\n")
 }
 
-fileConn <- file(sh_runfile)
-writeLines(paste(full_run_input, sep=""), fileConn)
-close(fileConn)                                                                                                                               
+# Combine the test results into a dataframe
+results_df <- do.call(rbind, lapply(names(test_results), function(area) {
+  result <- test_results[[area]]
+  data.frame(
+    BrodmannArea = area,
+    p_value = result$p.value,
+    test_statistic = result$statistic
+  )
+}))
+results_df$BrodmannArea <- as.factor(results_df$BrodmannArea)
+
+ggplot(sub_data, aes(x = BrodmannArea, y = A2GEditingIndex, fill = AD)) +
+  scale_fill_manual(values = c("#d80c8c", "#00aeef")) +
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "Brodmann Area", y = "AEI Index", title = "AEIs of AD vs Controls") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  # Add text labels for p-values
+  geom_text(data = results_df, aes(x = BrodmannArea, label = paste("p =", round(p_value, 3))),
+            vjust = -0.5, hjust = 0.5, size = 3) +
+  # Add test statistic as a subtitle
+  labs(subtitle = "Mann-Whitney U Test Statistic") +
+  geom_text(data = results_df, aes(label = sprintf("U = %.2f", test_statistic)),
+            vjust = -0.8, hjust = 0.5, size = 3)
+
+# Visualize means of AEI 
+BM10_AEI <- ggplot(BM10, aes(x = CERAD, y = A2GEditingIndex, group = CERAD)) +
+  geom_violin() +
+  labs(title = "A-to-I Indices")
+
+# Visualize distribution of edited genic regions using grouped bar plot
+genic_regions_data <- data %>%
+  select("filename","AD","UTR3","UTR5","Downstream","Exonic","Intergenic","Intronic","ncRNA_exonic",
+         "ncRNA_intronic","Splicing","Upstream","Upstream;Downstream") %>%
+  pivot_longer(cols = c("UTR3","UTR5","Downstream","Exonic","Intergenic","Intronic","ncRNA_exonic",
+                        "ncRNA_intronic","Splicing","Upstream","Upstream;Downstream"),
+               names_to = "region",
+               values_to = "value")
+
+genic_regions_mean_se <- genic_regions_data %>%
+  filter(!is.na(AD)) %>%
+  group_by(AD, region) %>%
+  summarize(mean_value = mean(value),
+            sd_value = sd(value))
+
+ggplot(genic_regions_mean_se, aes(x = region, y = mean_value, fill = AD)) +
+  scale_fill_manual(values = c("#d80c8c", "#00aeef", "pink")) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+  geom_errorbar(aes(ymin = mean_value - sd_value, ymax = mean_value + sd_value),
+                position = position_dodge(width = 0.8), width = 0.25) +
+  theme_classic() +
+  labs(x = "Genic Region", y = "Proportion of Edits", title = "Proportion of Edits in Various Genic Regions") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Differential editing analysis -------------------------------------------
+# Load in txt file that contains metadata for all editing sites
+editing_meta <- read_tsv("/sc/arion/projects/breen_lab/OCD_RNAseq/CNS_REDi_combined.txt") %>%
+  mutate(site = paste(chromosome, position, sep = "_")) %>%
+  relocate(site, .before = 1) %>%
+  select(site, Repeat, Region, Gene) %>%
+  distinct(site, .keep_all = TRUE) 
+
+library(limma)
+library(edgeR)
+
+CDR = as.factor(BM10$CDR)
+Braak = as.factor(BM10$Braak)
+CERAD = as.factor(BM10$CERAD)
+AD = as.factor(BM10$AD)
+Ancestry = as.factor(BM10$ethnicity)
+Sex = as.factor(BM10$sex)
+RIN = (BM10$RIN)
+
+design <- model.matrix(~0+AD+Sex+Ancestry+RIN) #Create design matrix
+fit <- lmFit(BM10_raw,design) # Fit linear model
+cm <-makeContrasts(DevEffect = (ADpos - ADneg),levels=design)
+fit2 <- contrasts.fit(fit, cm)
+fitDupCor <- eBayes(fit2)
+DE_sites<- topTable(fitDupCor, coef="DevEffect", n=nrow(BM10_raw)) 
+DE_sites <- DE_sites %>% mutate(neglog10.adj.P.Val = -log10(adj.P.Val))
+
+ggplot(DE_sites, aes(x = logFC, y = neglog10.adj.P.Val)) +
+  geom_point(aes(color = ifelse(adj.P.Val < 0.05 & abs(logFC) > 0.15, "red", "black")), size = 2) +
+  scale_color_identity() +
+  labs(x = "logFC", y = "adj.P.Val") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "red") +
+  geom_vline(xintercept = c(-0.15, 0.15), linetype = "dashed", color = "blue") +
+  theme_minimal()
+
+# Look at AEI in AD vs non-AD
+# Visualize means of AEI 
+BM10_AEI <- ggplot(BM10, aes(x = CERAD, y = A2GEditingIndex, group = CERAD)) +
+  geom_violin() +
+  labs(title = "A-to-I Indices")
